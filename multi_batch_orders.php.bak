@@ -1,0 +1,368 @@
+<?php
+
+
+	error_reporting(E_ALL);
+	ini_set('display_errors', '1');
+
+	ini_set("memory_limit","999999999M");
+
+	include('ms-dbfunc.php');
+
+	$ms_connect = ms_connect();
+	$arr_data = array();
+
+	if (isset($_REQUEST['mode']) && $_REQUEST['mode'] == "getData")
+	{
+
+		$date ="";
+		if (isset($_REQUEST['date']))
+		{
+			$date = " AND CONVERT(CHAR(10),so.RequestedDeliveryDate,120) >= '". $_REQUEST['date']."'";
+		}
+	
+		$Priority = "";
+		if (isset($_REQUEST['Priority']) && !empty($_REQUEST['Priority']))
+		{
+			$Priority = " and ActionGroup.Priority =". $_REQUEST['Priority'];
+		}
+
+
+		$locked = "";
+		if (isset($_REQUEST['locked']) &&$_REQUEST['locked'] == 1)
+		{
+			$locked = " and ActionGroup.LockedByUserId is not null";
+		}
+
+		$unlocked = "";
+		if (isset($_REQUEST['unlocked']) &&$_REQUEST['unlocked'] == 1)
+		{
+			$locked = " and ActionGroup.LockedByUserId is  null";
+		}
+
+		$sql ="SELECT 
+				count(*)
+			  FROM 
+				[ActionGroup]
+			  where  
+				 [ActionGroup].ActionTypeId =1 
+				and 
+				 CompletedTimestamp is null";
+			  
+		 
+		$arr_data['numactions'] = ms_query_value($sql);
+
+
+		$sql = "SELECT 
+					ActionGroup.Priority as Priority,
+					count(*) as PriorityCount
+				FROM 
+					[ActionGroup]
+				where   
+					[ActionGroup].ActionTypeId =1 and CompletedTimestamp is null
+				GROUP BY 
+					ActionGroup.Priority";
+
+		$arr_data['actionPriority'] = ms_query_all($sql);
+
+		$sql = "SELECT 
+					ActionGroup.Priority as Priority,
+					count(*) as PriorityCount
+				FROM 
+					[ActionGroup]
+				WHERE 
+					[ActionGroup].ActionTypeId =1 and CompletedTimestamp is null
+				GROUP BY 
+					ActionGroup.Priority";
+
+		$arr_data['actionPriority1'] = ms_query_col_assoc($sql);
+
+
+		$sql = "SELECT 
+					COUNT(actiongroupid)  
+				FROM 
+					actiongroup 
+				WHERE 
+						[ActionGroup].ActionTypeId =1 
+					AND 
+						CompletedTimestamp is null 
+					AND 
+						LockedByUserId is not null";
+
+		$arr_data['lockedbatches'] = ms_query_value($sql);
+
+
+		$sql = "SELECT 
+					COUNT(actiongroupid)   
+				FROM 
+					actiongroup 
+				WHERE 
+					  [ActionGroup].ActionTypeId =1 
+					AND 
+					   CompletedTimestamp is null 
+					AND 
+					   LockedByUserId is  null";
+
+		$arr_data['unlockedbatches'] = ms_query_value($sql);
+
+
+		$sql = "SELECT 
+					ActionGroup.Name as action, 
+					max(SalesOrder.SalesOrderNumber) as SalesOrderNumber,
+					min(CONVERT(CHAR(10),SalesOrder.RequestedDeliveryDate,120)) as date,
+					max([ChannelName]) as ChannelName,
+					MAX(SalesOrderStatus.name) as statusname,
+					MAX(ActionGroup.Priority) as Priority,
+					MAX([USER].DisplayName) as DisplayName
+				FROM 
+					[ActionGroup]
+				  join 
+					SalesOrderActionGroup on (ActionGroup.ActionGroupId = SalesOrderActionGroup.ActionGroupId)
+				  join 
+					SalesOrder on (SalesOrderActionGroup.SalesOrderId = SalesOrder.SalesOrderId)
+				  join 
+					SalesOrderStatus ON (SalesOrder.StatusId = SalesOrderStatus.SalesOrderStatusId)
+				  left  outer  join 
+					[User] on (ActionGroup.LockedByUserId = [user].UserID)
+				 WHERE 
+					   [ActionGroup].ActionTypeId =1 
+					  and 
+					   CompletedTimestamp is null ".$Priority  .$locked. "
+				 GROUP BY 
+					ActionGroup.Name
+				 ORDER BY 
+					min(SalesOrder.RequestedDeliveryDate)
+		";
+
+
+		$arr_data['actions'] = ms_query_all($sql);
+
+
+		$sql = "select 
+ActionGroup.Name,
+SalesOrder.SalesOrderNumber  as  SalesOrderNumber,
+SalesOrder.ChannelName as ChannelName,
+SalesOrder.RequestedDeliveryDate
+from
+ActionGroup
+  join SalesOrderActionGroup on (ActionGroup.ActionGroupId = SalesOrderActionGroup.ActionGroupId)
+  join SalesOrder on (SalesOrderActionGroup.SalesOrderId = SalesOrder.SalesOrderId)
+  where ActionGroup.Name in 
+  (SELECT ActionGroup.Name
+  FROM [ActionGroup]
+  join SalesOrderActionGroup on (ActionGroup.ActionGroupId = SalesOrderActionGroup.ActionGroupId)
+  join SalesOrder on (SalesOrderActionGroup.SalesOrderId = SalesOrder.SalesOrderId)
+  where   [ActionGroup].ActionTypeId =1 and CompletedTimestamp is null
+  group by ActionGroup.Name
+  )
+  order by SalesOrder.RequestedDeliveryDate";
+
+  $sql = "select 
+ActionGroup.Name,
+SalesOrder.SalesOrderNumber  as  SalesOrderNumber,
+SalesOrder.ChannelName as ChannelName,
+SalesOrder.RequestedDeliveryDate,
+ItemTypeGroup.Name as cat
+from
+ActionGroup
+  join SalesOrderActionGroup on (ActionGroup.ActionGroupId = SalesOrderActionGroup.ActionGroupId)
+  join SalesOrder on (SalesOrderActionGroup.SalesOrderId = SalesOrder.SalesOrderId)
+  join SalesOrderItem on (SalesOrder.SalesOrderId = SalesOrderItem.SalesOrderId)
+  join ItemType on (SalesOrderItem.ItemTypeId = ItemType.ItemTypeId)
+   join ItemTypeGroup on (ItemType.ItemTypeGroupId = ItemTypeGroup.ItemTypeGroupId)
+ 
+  where ActionGroup.Name in 
+  (SELECT ActionGroup.Name
+  FROM [ActionGroup]
+  join SalesOrderActionGroup on (ActionGroup.ActionGroupId = SalesOrderActionGroup.ActionGroupId)
+  join SalesOrder on (SalesOrderActionGroup.SalesOrderId = SalesOrder.SalesOrderId)
+  where CompletedTimestamp is null and  [ActionGroup].ActionTypeId =2
+  group by ActionGroup.Name
+  )
+  order by SalesOrder.RequestedDeliveryDate";
+
+
+  $arr_data['action_orders'] = ms_query_all_assoc($sql);
+
+  $sql ="SELECT 
+	ag.Name
+   	,left(h.barcode,1) as zone   
+     FROM [ActionDetail] ad
+  join ActionGroup ag on (ad.ActionGroupId = ag.ActionGroupId)
+  join Holder h on (ad.FromHolderId =h.HolderId)
+  where ad.ActionGroupId in (
+  SELECT ActionGroup.ActionGroupId
+  FROM [ActionGroup]
+  join SalesOrderActionGroup on (ActionGroup.ActionGroupId = SalesOrderActionGroup.ActionGroupId)
+  join SalesOrder on (SalesOrderActionGroup.SalesOrderId = SalesOrder.SalesOrderId)
+  where  [ActionGroup].ActionTypeId =1 and CompletedTimestamp is null
+  group by ActionGroup.ActionGroupId
+  )
+  and Sequence =0
+  order by ag.Name, Sequence";
+
+ $arr_data['action_zone'] = ms_query_col_assoc($sql);
+
+
+
+/*
+ $sql = "SELECT 
+	ag.Name
+  FROM 
+	ActionGroup ag 
+  join
+   ActionDetail a on (ag.actiongroupid = a.actiongroupid)
+  join 
+	SalesOrderActionGroup sog on (a.ActionGroupId = sog.ActionGroupId)
+  join 
+	holder h on  (a.FromHolderId = h.holderid) 
+   where  
+	(h.Barcode like 'I%' or h.Barcode like 'J%')
+	and 
+		a.CompletedTimeStamp is null and ag.ActionTypeId =2
+  group by ag.Name";
+
+ $arr_data['sec_action_zones'] = ms_query_col($sql);
+
+ if (count( $arr_data['sec_action_zones']) > 0)
+{
+	$str_actions = "(ag.Name ='".implode("' or ag.Name = '", $arr_data['sec_action_zones']) ."')";
+
+	$sql = "  select 
+				  ag.Name,
+				  COUNT(*)
+			  FROM 
+					ActionGroup ag 
+				  join
+				   ActionDetail a on (ag.actiongroupid = a.actiongroupid)
+				  join 
+					holder h on  (a.FromHolderId = h.holderid) 
+			 WHERE
+				".$str_actions ."
+			   and   
+				(h.Barcode like 'I%' or h.Barcode like 'J%')
+			GROUP BY 
+			ag.Name";
+
+		 $arr_data['sec_action_zones_count'] = ms_query_col_assoc($sql);
+
+
+*/
+
+
+}
+
+
+
+
+
+/*
+
+				$sql= "SELECT 
+						so.[SalesOrderId]
+				     FROM 
+						[SalesOrder] as so
+					 WHERE
+						StatusId NOT IN (4,5,6) ". $date;
+
+
+
+			$arr_orders = ms_query_col($sql);
+
+			$str_salesorders = "('". implode("','", $arr_orders) ."')";
+
+
+
+
+
+			//print_r($arr_orders);
+
+
+			$sql = "SELECT 
+						max(ActionDetail.SalesOrderId) as SalesOrderId
+						,ActionGroup.Name as ActionName
+					 FROM 
+						[ActionDetail]
+					  JOIN  
+						ActionGroup on (ActionDetail.ActionGroupId = ActionGroup.ActionGroupId)
+					  WHERE 
+						ActionDetail.SalesOrderId in ".$str_salesorders."
+						group by ActionGroup.Name
+					";
+
+
+		$sql .= "union SELECT
+					max(SalesOrderId) as SalesOrderId
+					,name
+				FROM 
+					[SalesOrderActionGroup]
+				  JOIN 
+					ActionGroup on ([SalesOrderActionGroup].ActionGroupId = ActionGroup.ActionGroupId)
+				WHERE
+				SalesOrderId in  ".$str_salesorders."
+				group by Name";
+
+	
+  			$arr_data['action_tmp'] = ms_query_col_assoc($sql);
+
+			
+			$arr_ids = array_keys($arr_data['action_tmp']);
+
+
+
+			$sql = "SELECT 
+						SalesOrderId as SalesOrderId,
+						CONVERT(CHAR(10), RequestedDeliveryDate,120) as date
+					FROM 
+						[SalesOrder] 
+					WHERE 
+						SalesOrderId in ('". implode("','", $arr_ids) ."')
+					order by 
+					CONVERT(CHAR(10),RequestedDeliveryDate,120)";
+
+
+			
+		$arr_t  = ms_query_all($sql);
+
+
+		$arr_data['action'] =array();
+
+			
+		foreach($arr_t  as $tmp)
+		{				
+			if (isset($arr_data['action_tmp'][$tmp['SalesOrderId']]))
+			{
+				$arr_data['action'][$tmp['SalesOrderId']] = $arr_data['action_tmp'][$tmp['SalesOrderId']];
+			}
+		}
+
+
+		$sql= "SELECT 
+				   soi.[SalesOrderId] as SalesOrderId
+				  ,max([SalesOrderNumber]) as SalesOrderNumber
+				  ,max([ChannelName]) as ChannelName
+				  ,sum(QuantityOrdered) as qty
+				  ,max(CONVERT(CHAR(10),so.RequestedDeliveryDate,120)) as date
+				  ,MAX(sos.name) as statusname
+			   FROM 
+					[SalesOrder] as so
+				 JOIN 
+					SalesOrderItem as soi on (so.SalesOrderId = soi.SalesOrderId)
+				JOIN
+				    SalesOrderStatus AS SOS ON (so.StatusId =SOS.SalesOrderStatusId)
+			  WHERE
+				StatusId NOT IN (4,5,6) ". $date ." 
+			  GROUP BY 
+				soi.SalesOrderId
+			 ORDER by 
+				max(CONVERT(CHAR(10),so.RequestedDeliveryDate,120))";
+
+
+		$arr_data['orders'] = ms_query_all_assoc($sql);
+*/
+		
+	}
+
+
+	$data = base64_encode(serialize($arr_data));
+
+	echo $data;

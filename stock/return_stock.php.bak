@@ -1,0 +1,149 @@
+<?php
+
+include('../ms-dbfunc.php');
+require_once 'json/stock.php';
+
+class ReturnStock{
+	private $stock = null;
+	private $itemCode = null;
+	private $limit = null;
+	private $dateTimeStamp = null;
+	public $stock_count = 0;
+
+	function __construct() {
+		if (null == $this->stock) {
+			$this->stock = new Stock();
+		}
+	}
+
+	public function itemCode($itemCode)
+	{
+		$this->itemCode = $itemCode;
+	}
+
+	public function limit($limit)
+	{
+		$this->limit = $limit;
+	}
+
+	public function dateTimeStamp($dateTimeStamp)
+	{
+		$this->dateTimeStamp = $dateTimeStamp;
+	}
+
+	public function run() {
+		return $this->getdata();
+	}
+
+	public function getData() {
+		$ms_connect = ms_connect();
+	
+		$sql = "SELECT 
+					TOP ".$this->limit." 
+						ItemCode,
+						datetimestamp
+					from 
+					(
+						SELECT 
+						TOP (".$this->limit." *2)
+							it.ItemCode 
+							,CONVERT(CHAR(19),h.DATETIMESTAMP,120) as datetimestamp 
+						FROM 
+							NonSerializedInventoryItemMovementHistory h 
+						join 
+							itemtype IT on h.ItemTypeId = it.ItemTypeId 
+						WHERE 
+							DateTimeStamp >='".$this->dateTimeStamp."'   
+							AND 
+							it.ItemCode > '".$this->itemCode."'
+						ORDER BY 
+							CONVERT(CHAR(19),h.DATETIMESTAMP,120),
+							it.ItemCode 
+					) as g
+					group by 
+					ItemCode,
+					datetimestamp";
+
+		
+		$arr_skus = ms_query_col_assoc($sql);
+
+		$sku_list = array_keys($arr_skus);
+
+		$str_sku_sql ="( it.ItemCode  = '".implode("'or  it.ItemCode  = '", $sku_list)."')";
+
+
+		$sql = "SELECT
+							IT.itemcode,
+							SUM(COALESCE(N.Quantity,0))  AS 'OnHand'
+							,COALESCE(MAX(SOIP.QuantityAllocated) - MAX(SOIP.QuantityDespatched),0) AS  'Allocated'
+								,(
+				CASE 
+				WHEN SUM(COALESCE(N.Quantity,0)) - COALESCE(MAX(SOIP.QuantityAllocated) - MAX(SOIP.QuantityDespatched),0) > 0 
+					THEN SUM(COALESCE(N.Quantity,0)) - COALESCE(MAX(SOIP.QuantityAllocated) - MAX(SOIP.QuantityDespatched),0)
+				ELSE
+					0
+				END) AS 'Available'
+
+						FROM (ItemType IT 
+							INNER JOIN ItemTypeGroup ITG
+							ON ITG.ItemTypeGroupId = IT.ItemTypeGroupId
+							LEFT OUTER JOIN UnitOfMeasure U1
+							ON U1.UnitOfMeasureId = IT.UnitOfMeasureId
+							LEFT OUTER JOIN UnitOfMeasure U2
+							ON U2.UnitOfMeasureId = IT.WeightMeasureId
+							LEFT OUTER JOIN UnitOfMeasure U3
+							ON U3.UnitOfMeasureId = IT.DimensionMeasureId
+							LEFT OUTER JOIN PickPolicy PP
+							ON PP.PickPolicyId = IT.PickPolicyId)
+							LEFT OUTER JOIN NonSerializedInventoryItem AS N ON N.ItemTypeId = IT.ItemTypeId
+								AND not  EXISTS (SELECT 1
+								FROM RemovedHolderView AS T
+								WHERE N.HolderId = T.HolderId
+								AND TableTypeId = 0)
+							LEFT OUTER JOIN (
+			SELECT SUM(QuantityPicked) AS QuantityPicked, SUM(QuantityDespatched) AS QuantityDespatched, 
+				SUM(QuantityAllocated) AS QuantityAllocated, SUM(QuantityOrdered) AS QuantityOrdered,
+				ItemTypeId
+				FROM SalesOrderItemPicking
+				WHERE SalesOrderItemId IN (
+					SELECT SalesOrderItemId
+					FROM SalesOrderItem
+					WHERE SalesOrderId IN (
+						SELECT SalesOrderId
+						FROM SalesOrder
+						WHERE StatusId <> 6)) 
+				GROUP BY ItemTypeId
+			 ) AS SOIP ON SOIP.ItemTypeId = IT.ItemTypeId
+						WHERE 
+								IT.Active = 1
+							AND  not EXISTS (
+								SELECT *
+								FROM RemovedHolderView AS T
+								WHERE (N.HolderId = T.HolderId)
+								AND TableTypeId = 0)  and ". $str_sku_sql ."
+					group by it.ItemCode";
+		$arr_data = ms_query_all_assoc($sql);
+		return $this->process($arr_data, $arr_skus);
+		
+	}
+
+	public function process($arr_data,$arr_skus) {
+		$stocks = array();
+		foreach ($arr_skus as $sku => $logged) {
+			
+			$arr_line_data = $arr_data[$sku][0];
+
+			$this->stock->sku = $arr_line_data['itemcode'];
+			$this->stock->qty = $arr_line_data['Available'];
+			$this->stock->datetimestamp = $logged;
+			$stocks[] = $this->stock->getFields();
+		}
+		$this->stock_count = count($stocks);
+		$stockToJson = array(
+			'stocks' => $stocks
+		);
+		return json_encode($stockToJson);
+	
+	}
+}
+	

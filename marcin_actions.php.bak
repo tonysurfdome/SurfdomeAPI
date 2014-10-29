@@ -1,0 +1,33 @@
+
+<?php
+
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
+include('ms-dbfunc.php');
+
+$ms_connect = ms_connect();
+$actions  = array();
+
+if (isset($_REQUEST['mode']) && $_REQUEST['mode'] == "getData")
+{
+
+	$sql ="SELECT 
+		SalesOrder.SalesOrderNumber
+	  FROM [PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[ActionDetail]
+		inner join SalesOrder on (ActionDetail.SalesOrderId = SalesOrder.SalesOrderId)
+	  WHERE 
+		Reason LIKE '%MARCIN%' 
+		and  
+		StatusId <>5
+	  GROUP BY SalesOrder.SalesOrderNumber";
+
+	$actions = ms_query_col($sql);
+
+
+
+}
+
+$rtndata = base64_encode(serialize($actions));
+echo $rtndata;
+

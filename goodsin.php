@@ -1,0 +1,73 @@
+<?php
+
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
+
+$user='sduser';
+$pass='password';
+$database="PeopleVox.OneBusinessPortal.Surfdome2536";
+//$database ='Surfdome2536';
+//$table='ActionCodes';
+
+
+$serverName = 'AMAZONA-FSVEOGN';
+
+$connectioninfro = array("Database" => $database, "UID" => $user,"PWD" => $pass);
+
+
+
+$link = sqlsrv_connect($serverName, $connectioninfro);
+
+if ($link)
+{
+    //die('Something went wrong while connecting to MSSQL');
+}
+else
+{
+	echo print_r(sqlsrv_errors(), true);
+}
+
+
+$sql = "SELECT 
+     b.Barcode
+      ,SUM([Quantity]) as qty
+  FROM [PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[NonSerializedInventoryItem] AS a
+    INNER JOIN
+[PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[Holder] AS B ON (A.HolderId = B.HolderId)
+  where
+  
+  a.HolderId IN (23316,23319,23320,23321,23322,23331,23332,23333,23334,23335,23336,23337,23338,23339,23340,23341,23342,23343,23344,23345,23346,23347,23348,23349,23350,23351,23353,23354,23355,23356,23357,23358,23359,56427,23317,23323,23324,23325,23326,23360,23361,23362,23363,23364,23365,23366,23367,23368,23369,23370,23371,23372,23373,23374,23375,23376,23377,23378,23379,23380,23381,23382,23383,23384,23385,23386,23387,23318,23327,23328,23329,23330,23395,23396,23397,23398,23399,23400,23401,23402,23403,23404,23405,23406,23407,23408,23409,23410,23411,23412,23413,23414,23415,23416,23417,23418,23419,23420,23421,23422,41949,41956,41957,41958,41960,41961,41968,41969,41971,41972,41950,41988,41989,41990,41991,41992,41995,41996,41997,41998,41951,42064,42065,42066,42068,42069,42071,42072,42073,42074)
+  GROUP BY b.Barcode";
+
+  $sql = " SELECT 
+     b.Barcode
+      ,SUM([Quantity]) as qty
+  FROM [PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[NonSerializedInventoryItem] AS a
+    INNER JOIN
+[PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[Holder] AS B ON (A.HolderId = B.HolderId)
+  where
+  
+	  
+	(b.Barcode like 'SD1.Q8%'  
+	OR b.Barcode like 'GIT%')
+   GROUP BY b.Barcode";
+
+
+$result=sqlsrv_query($link, $sql) or sqlsrv_errors();
+
+$arr_rtn = array();
+
+while($arr_line_data=sqlsrv_fetch_array($result))
+{
+	$arr_rtn[$arr_line_data['Barcode']] =  $arr_line_data['qty'];
+}
+
+$data = base64_encode(serialize($arr_rtn));
+
+//print_r($arr_rtn);
+
+echo $data;
+
+?>
+

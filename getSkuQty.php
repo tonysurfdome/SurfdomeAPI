@@ -1,0 +1,42 @@
+<?php 
+
+	error_reporting(E_ALL);
+	ini_set('display_errors', '1');
+
+	include('ms-dbfunc.php');
+
+	$ms_connect = ms_connect();
+	$arr_data = array();
+
+	if (isset($_REQUEST['mode']) && $_REQUEST['mode'] == "getData")
+	{
+
+		$sku = (isset($_REQUEST['sku'])) ? $_REQUEST['sku'] : "x";
+
+		if ($sku != "x")	
+		{
+			$sql = "SELECT 
+							COALESCE(SUM(ni.Quantity),0)
+					FROM 
+							[PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[ItemType] IT 
+						LEFT  JOIN                           
+							[PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[NonSerializedInventoryItem] NI on (IT.ItemTypeId = NI.ItemTypeId)
+							join 
+								Holder on (ni.HolderId = Holder.HolderId)
+							JOIN 
+								Location ON (Holder.HolderId = Location.HolderId)
+					WHERE 
+							ItemCode = '".$sku."'
+							AND Location.LocationUseTypeId !=4
+							and Holder.HolderTypeId =1
+					";
+				$qty = ms_query_value($sql);
+				echo $qty;
+		}
+		else
+		{
+
+			echo "XXXX";
+		}
+	}
+	

@@ -1,0 +1,13 @@
+SELECt
+      [SalesOrderNumber]
+	,CONVERT(CHAR(10),[RequestedDeliveryDate],120) as orderDate
+      ,[CustomerPurchaseOrderReferenceNumber] as webOrderNumber
+      ,sos.Name as status
+      ,[Email]
+      ,[ContactName]
+      ,st.Name as ShippingType
+      ,[ChannelName]
+  FROM [PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[SalesOrder] so
+  join SalesOrderStatus sos on (so.StatusId =sos.SalesOrderStatusId)
+  join ServiceType st on (so.ServiceTypeId = st.ServiceTypeId)
+  where StatusId not in (5,6);

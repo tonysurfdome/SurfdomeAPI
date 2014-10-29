@@ -1,0 +1,51 @@
+<?php
+
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
+include('ms-dbfunc.php');
+
+$ms_connect = ms_connect();
+
+$arr_qty = array();
+
+
+function getItemType($sku)
+{
+	$sql = "SELECT 
+						ItemTypeId
+					FROM 
+						[PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[ItemType]
+				    WHERE 
+						[ItemCode]= '".$sku ."'";
+	$ItemTypeId = ms_query_value($sql);
+
+	return $ItemTypeId;
+}
+
+
+if (isset($_REQUEST['mode']) && $_REQUEST['mode'] == "getData")
+{
+
+	$data = (isset($_REQUEST['data'])) ? $_REQUEST['data'] : "";
+
+	if (!(empty($data)))
+	{
+		$arr_data = unserialize(base64_decode($data));
+
+		foreach ($arr_data as $data)
+		{
+			
+			$oldSKU = getItemType($data['old']);
+			$newSKU = getItemType($data['new']);
+
+			$sql = "UPDATE NonSerializedInventoryItem SET ItemTypeId =".$newSKU . " WHERE ItemTypeId = ".$oldSKU;
+			//ms_doquery($sql);
+
+			echo $sql;
+
+		}
+
+	}
+	
+}

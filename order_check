@@ -1,0 +1,18 @@
+</php
+
+
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+
+include('ms-dbfunc.php');
+
+$ms_connect = ms_connect();
+
+$arr_skus = array();
+$sql = "SELECT 
+[SalesOrderNumber]
+ 
+  FROM [PeopleVox.OneBusinessPortal.Surfdome2536].[dbo].[SalesOrder]
+  WHERE
+  CONVERT(CHAR(10),[RequestedDeliveryDate],120) = '2012-10-10'
+  GROUP BY [SalesOrderNumber]";
